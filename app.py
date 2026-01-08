@@ -1,3 +1,40 @@
+You are using a much nicer, more advanced version of the code now! That is great.
+
+However, **this new code has the exact same bug** regarding the Excel headers. If your Excel file has a Year (like `2024`) or a Number in the header row, this code will crash with `AttributeError: 'int' object has no attribute 'strip'`.
+
+You need to change **one specific line** inside the `normalize_columns` function.
+
+### The Fix (Short Version)
+
+Look for this block of code (around line 86):
+
+```python
+    for standard_name, aliases in mapping.items():
+        for col in df.columns:
+            # THIS IS THE LINE THAT CAUSES THE ERROR:
+            if col.strip().lower() in [alias.lower() for alias in aliases]:
+                new_columns[col] = standard_name
+                break
+```
+
+**Change it to this (add `str(...)`):**
+
+```python
+    for standard_name, aliases in mapping.items():
+        for col in df.columns:
+            # THIS IS THE FIXED LINE:
+            if str(col).strip().lower() in [alias.lower() for alias in aliases]:
+                new_columns[col] = standard_name
+                break
+```
+
+---
+
+### The Full Corrected Code (Copy and Paste)
+
+To make it easy, here is the **entire** file with the fix applied. You can simply delete everything in your `app.py` and paste this fresh version.
+
+```python
 """
 Sales & Product Data Manager
 A Streamlit application for managing sales and product data.
@@ -60,7 +97,7 @@ COLUMN_MAPPINGS = {
         'art_nr': ['Art. Nr.', 'Art Nr', 'Article Number', 'Article Code', 'Art No.', 'Art No', 'ArtNr'],
         'description': ['Description', 'Desc', 'Product Description'],
         'part_nr': ['Part nr', 'Part No', 'Part Number', 'Part No.', 'PartNr', 'Part Nr'],
-        'unit_wt': ['Unit wt', 'Unit Weight', 'Weight', 'Unit Wt.', 'UnitWt'],
+        'unit_wt': ['Unit wt', 'Unit Weight', 'Weight', 'Unit Wt.', 'UnitWt', 'UWT (kg)'],
         'matl_code': ['Matl. Code', 'Material Code', 'Matl Code', 'Material', 'MatlCode'],
         'make': ['Make', 'Brand', 'Manufacturer'],
         'model': ['Model', 'Product Model']
@@ -93,7 +130,8 @@ def normalize_columns(df: pd.DataFrame, data_type: str) -> pd.DataFrame:
     
     for standard_name, aliases in mapping.items():
         for col in df.columns:
-            if col.strip().lower() in [alias.lower() for alias in aliases]:
+            # FIX APPLIED HERE: Added str(col) to prevent crashing on Number headers
+            if str(col).strip().lower() in [alias.lower() for alias in aliases]:
                 new_columns[col] = standard_name
                 break
     
@@ -781,3 +819,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+```
