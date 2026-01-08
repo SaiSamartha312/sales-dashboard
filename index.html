@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales & Product Data Manager</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .tab-active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .sidebar { width: 320px; transition: transform 0.3s ease; }
+        .sidebar.collapsed { transform: translateX(-320px); }
+        .main-content { transition: margin-left 0.3s ease; }
+        .file-upload-zone { border: 2px dashed #cbd5e1; transition: all 0.3s ease; }
+        .file-upload-zone:hover { border-color: #667eea; background: #f8fafc; }
+        .file-upload-zone.dragover { border-color: #667eea; background: #eef2ff; }
+        .data-table { font-size: 0.85rem; }
+        .data-table th { position: sticky; top: 0; z-index: 10; }
+        .pivot-cell { min-width: 100px; }
+        .search-highlight { background: #fef08a; padding: 2px 4px; border-radius: 3px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar fixed left-0 top-0 h-full bg-white shadow-xl z-50 overflow-y-auto">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-database mr-2 text-indigo-600"></i>Data Manager
+                </h2>
+                <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- File Upload Sections -->
+            <div class="space-y-4">
+                <!-- Pricelist Upload -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-tags mr-2 text-blue-500"></i>Pricelist
+                    </h3>
+                    <div id="pricelist-zone" class="file-upload-zone rounded-lg p-4 text-center cursor-pointer"
+                         onclick="document.getElementById('pricelist-input').click()"
+                         ondragover="handleDragOver(event, 'pricelist-zone')"
+                         ondragleave="handleDragLeave(event, 'pricelist-zone')"
+                         ondrop="handleDrop(event, 'pricelist')">
+                        <input type="file" id="pricelist-input" class="hidden" accept=".csv,.xlsx,.xls" 
+                               onchange="handleFileUpload(event, 'pricelist')">
+                        <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-2"></i>
+                        <p class="text-sm text-gray-500">Drop file or click to upload</p>
+                        <p class="text-xs text-gray-400 mt-1">CSV or Excel</p>
+                    </div>
+                    <div id="pricelist-status" class="mt-2 text-sm"></div>
+                </div>
+
+                <!-- Quotation Upload -->
+                <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-file-invoice mr-2 text-green-500"></i>Quotation List
+                    </h3>
+                    <div id="quotation-zone" class="file-upload-zone rounded-lg p-4 text-center cursor-pointer"
+                         onclick="document.getElementById('quotation-input').click()"
+                         ondragover="handleDragOver(event, 'quotation-zone')"
+                         ondragleave="handleDragLeave(event, 'quotation-zone')"
+                         ondrop="handleDrop(event, 'quotation')">
+                        <input type="file" id="quotation-input" class="hidden" accept=".csv,.xlsx,.xls" 
+                               onchange="handleFileUpload(event, 'quotation')">
+                        <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-2"></i>
+                        <p class="text-sm text-gray-500">Drop file or click to upload</p>
+                        <p class="text-xs text-gray-400 mt-1">CSV or Excel</p>
+                    </div>
+                    <div id="quotation-status" class="mt-2 text-sm"></div>
+                </div>
+
+                <!-- Order Acknowledgement Upload -->
+                <div class="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-clipboard-check mr-2 text-purple-500"></i>Order Acknowledgement
+                    </h3>
+                    <div id="oa-zone" class="file-upload-zone rounded-lg p-4 text-center cursor-pointer"
+                         onclick="document.getElementById('oa-input').click()"
+                         ondragover="handleDragOver(event, 'oa-zone')"
+                         ondragleave="handleDragLeave(event, 'oa-zone')"
+                         ondrop="handleDrop(event, 'oa')">
+                        <input type="file" id="oa-input" class="hidden" accept=".csv,.xlsx,.xls" 
+                               onchange="handleFileUpload(event, 'oa')">
+                        <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-2"></i>
+                        <p class="text-sm text-gray-500">Drop file or click to upload</p>
+                        <p class="text-xs text-gray-400 mt-1">CSV or Excel</p>
+                    </div>
+                    <div id="oa-status" class="mt-2 text-sm"></div>
+                </div>
+            </div>
+
+            <!-- Data Summary -->
+            <div id="data-summary" class="mt-6 p-4 bg-gray-50 rounded-lg hidden">
+                <h3 class="font-semibold text-gray-700 mb-3">
+                    <i class="fas fa-chart-pie mr-2 text-indigo-500"></i>Data Summary
+                </h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Products:</span>
+                        <span id="summary-products" class="font-medium text-gray-800">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Quotations:</span>
+                        <span id="summary-quotations" class="font-medium text-gray-800">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Orders:</span>
+                        <span id="summary-orders" class="font-medium text-gray-800">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clear Data Button -->
+            <button onclick="clearAllData()" class="mt-4 w-full py-2 px-4 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition text-sm font-medium">
+                <i class="fas fa-trash-alt mr-2"></i>Clear All Data
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main-content" class="main-content ml-0 lg:ml-80 min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm sticky top-0 z-40">
+            <div class="px-4 py-4 flex items-center justify-between">
+                <div class="flex items-center">
+                    <button onclick="toggleSidebar()" class="lg:hidden mr-4 text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    <h1 class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        Sales & Product Dashboard
+                    </h1>
+                </div>
+                <div class="text-sm text-gray-500">
+                    <i class="fas fa-clock mr-1"></i>
+                    <span id="current-time"></span>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="px-4 pb-2 flex flex-wrap gap-2">
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn px-4 py-2 rounded-lg font-medium transition tab-active">
+                    <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                </button>
+                <button onclick="switchTab('lookup')" id="tab-lookup" class="tab-btn px-4 py-2 rounded-lg font-medium transition bg-gray-100 hover:bg-gray-200">
+                    <i class="fas fa-search mr-2"></i>Product Lookup
+                </button>
+                <button onclick="switchTab('matrix')" id="tab-matrix" class="tab-btn px-4 py-2 rounded-lg font-medium transition bg-gray-100 hover:bg-gray-200">
+                    <i class="fas fa-table mr-2"></i>Sales Matrix
+                </button>
+                <button onclick="switchTab('viewer')" id="tab-viewer" class="tab-btn px-4 py-2 rounded-lg font-medium transition bg-gray-100 hover:bg-gray-200">
+                    <i class="fas fa-database mr-2"></i>Data Viewer
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab Contents -->
+        <div class="p-4 lg:p-6">
+            <!-- Dashboard Tab -->
+            <div id="content-dashboard" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm">Total Products</p>
+                                <p id="kpi-products" class="text-3xl font-bold text-gray-800">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-box text-blue-500 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm">Total Quotations</p>
+                                <p id="kpi-quotations" class="text-3xl font-bold text-gray-800">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-file-invoice text-green-500 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm">Total Orders</p>
+                                <p id="kpi-orders" class="text-3xl font-bold text-gray-800">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-shopping-cart text-purple-500 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-orange-500">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm">Total Revenue</p>
+                                <p id="kpi-revenue" class="text-3xl font-bold text-gray-800">$0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-dollar-sign text-orange-500 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-chart-bar mr-2 text-indigo-500"></i>Sales by Customer
+                        </h3>
+                        <div id="chart-customer" class="h-80"></div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-chart-line mr-2 text-green-500"></i>Sales Trend
+                        </h3>
+                        <div id="chart-trend" class="h-80"></div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-chart-pie mr-2 text-purple-500"></i>Sales by Model
+                        </h3>
+                        <div id="chart-model" class="h-80"></div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-tasks mr-2 text-orange-500"></i>Order Status
+                        </h3>
+                        <div id="chart-status" class="h-80"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product Lookup Tab -->
+            <div id="content-lookup" class="tab-content hidden">
+                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-search mr-2 text-indigo-500"></i>Search Products
+                    </h3>
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Search by Part Number or Article Code</label>
+                            <div class="relative">
+                                <input type="text" id="search-input" placeholder="Enter Part Number or Article Code..." 
+                                       class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                       onkeyup="handleSearch(event)">
+                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            </div>
+                        </div>
+                        <div class="flex items-end gap-2">
+                            <button onclick="performSearch()" class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">
+                                <i class="fas fa-search mr-2"></i>Search
+                            </button>
+                            <button onclick="clearSearch()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium">
+                                <i class="fas fa-times mr-2"></i>Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="search-results" class="space-y-6">
+                    <div class="bg-white rounded-xl shadow-sm p-12 text-center text-gray-500">
+                        <i class="fas fa-search text-6xl mb-4 text-gray-300"></i>
+                        <p class="text-lg">Enter a Part Number or Article Code to search</p>
+                        <p class="text-sm mt-2">Results will show product details and related history</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sales Matrix Tab -->
+            <div id="content-matrix" class="tab-content hidden">
+                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-filter mr-2 text-indigo-500"></i>Filters
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Data Source</label>
+                            <select id="matrix-source" class="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" onchange="updateMatrix()">
+                                <option value="orders">Orders (OA)</option>
+                                <option value="quotations">Quotations</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                            <select id="matrix-year" class="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" onchange="updateMatrix()">
+                                <option value="all">All Years</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+                            <select id="matrix-customer" class="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" onchange="updateMatrix()">
+                                <option value="all">All Customers</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Pivot By</label>
+                            <select id="matrix-pivot" class="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" onchange="updateMatrix()">
+                                <option value="customer-year">Customer × Year</option>
+                                <option value="customer-model">Customer × Model</option>
+                                <option value="model-year">Model × Year</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-gray-800">
+                            <i class="fas fa-table mr-2 text-indigo-500"></i>Sales Pivot Table
+                        </h3>
+                        <button onclick="exportMatrix()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium">
+                            <i class="fas fa-download mr-2"></i>Export CSV
+                        </button>
+                    </div>
+                    <div id="matrix-container" class="overflow-x-auto max-h-96 overflow-y-auto">
+                        <p class="text-gray-500 text-center py-8">Upload Order or Quotation data to view the sales matrix</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-chart-bar mr-2 text-purple-500"></i>Matrix Visualization
+                    </h3>
+                    <div id="matrix-chart" class="h-96"></div>
+                </div>
+            </div>
+
+            <!-- Data Viewer Tab -->
+            <div id="content-viewer" class="tab-content hidden">
+                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                        <div class="flex gap-2 flex-wrap">
+                            <button onclick="viewData('pricelist')" id="view-pricelist" class="view-btn px-4 py-2 bg-blue-600 text-white rounded-lg font-medium">
+                                <i class="fas fa-tags mr-2"></i>Pricelist
+                            </button>
+                            <button onclick="viewData('quotation')" id="view-quotation" class="view-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">
+                                <i class="fas fa-file-invoice mr-2"></i>Quotations
+                            </button>
+                            <button onclick="viewData('oa')" id="view-oa" class="view-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">
+                                <i class="fas fa-clipboard-check mr-2"></i>Orders
+                            </button>
+                            <button onclick="viewData('merged')" id="view-merged" class="view-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">
+                                <i class="fas fa-link mr-2"></i>Merged View
+                            </button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="viewer-filter" placeholder="Filter data..." 
+                                   class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                   onkeyup="filterViewerData()">
+                            <button onclick="exportViewerData()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium">
+                                <i class="fas fa-download mr-2"></i>Export
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div id="data-viewer-container" class="overflow-x-auto max-h-[600px] overflow-y-auto">
+                        <p class="text-gray-500 text-center py-8">Select a data source to view</p>
+                    </div>
+                    <div id="viewer-pagination" class="mt-4 flex justify-between items-center"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Global data stores
+        let data = {
+            pricelist: [],
+            quotation: [],
+            oa: []
+        };
+        
+        let currentViewerData = 'pricelist';
+        let viewerPage = 1;
+        const rowsPerPage = 50;
+
+        // Column mappings for normalization
+        const columnMappings = {
+            pricelist: {
+                artNr: ['Art. Nr.', 'Art Nr', 'Article Number', 'Article Code', 'Art No.', 'Art No'],
+                description: ['Description', 'Desc', 'Product Description'],
+                partNr: ['Part nr', 'Part No', 'Part Number', 'Part No.', 'PartNr'],
+                unitWt: ['Unit wt', 'Unit Weight', 'Weight', 'Unit Wt.'],
+                matlCode: ['Matl. Code', 'Material Code', 'Matl Code', 'Material'],
+                make: ['Make', 'Brand', 'Manufacturer'],
+                model: ['Model', 'Product Model']
+            },
+            quotation: {
+                date: ['Date', 'Quote Date', 'Quotation Date'],
+                clientName: ['Client Name', 'Customer', 'Client', 'Customer Name'],
+                model: ['Model', 'Product Model'],
+                artNo: ['Art No.', 'Art Nr', 'Article Number', 'Article Code', 'Art No'],
+                partNo: ['Part No', 'Part Number', 'Part Nr', 'Part No.'],
+                totalAmount: ['Total Amount', 'Amount', 'Total', 'Value'],
+                vertical: ['Vertical', 'Industry', 'Segment']
+            },
+            oa: {
+                clientPO: ['Client PO', 'PO Number', 'Purchase Order', 'PO'],
+                customer: ['Customer', 'Client Name', 'Client', 'Customer Name'],
+                model: ['Model', 'Product Model'],
+                artNo: ['Art No.', 'Art Nr', 'Article Number', 'Article Code', 'Art No'],
+                partNo: ['Part No', 'Part Number', 'Part Nr', 'Part No.'],
+                totalAmount: ['Total Amount', 'Amount', 'Total', 'Value'],
+                status: ['Status', 'Order Status', 'State']
+            }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateClock();
+            setInterval(updateClock, 1000);
+            updateDashboard();
+        });
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('main-content');
+            sidebar.classList.toggle('collapsed');
+            if (window.innerWidth >= 1024) {
+                mainContent.classList.toggle('lg:ml-80');
+                mainContent.classList.toggle('lg:ml-0');
+            }
+        }
+
+        // Tab switching
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('tab-active');
+                btn.classList.add('bg-gray-100', 'hover:bg-gray-200');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+            document.getElementById(`tab-${tab}`).classList.remove('bg-gray-100', 'hover:bg-gray-200');
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            
+            if (tab === 'matrix') updateMatrix();
+            if (tab === 'viewer') viewData(currentViewerData);
+            if (tab === 'dashboard') updateDashboard();
+        }
+
+        // File upload handling
+        function handleDragOver(e, zoneId) {
+            e.preventDefault();
+            document.getElementById(zoneId).classList.add('dragover');
+        }
+
+        function handleDragLeave(e, zoneId) {
+            e.preventDefault();
+            document.getElementById(zoneId).classList.remove('dragover');
+        }
+
+        function handleDrop(e, type) {
+            e.preventDefault();
+            document.getElementById(`${type}-zone`).classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) processFile(file, type);
+        }
+
+        function handleFileUpload(e, type) {
+            const file = e.target.files[0];
+            if (file) processFile(file, type);
+        }
+
+        function processFile(file, type) {
+            const statusEl = document.getElementById(`${type}-status`);
+            statusEl.innerHTML = '<span class="text-blue-600"><i class="fas fa-spinner fa-spin mr-1"></i>Processing...</span>';
+            
+            const reader = new FileReader();
+            const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+            
+            reader.onload = (e) => {
+                try {
+                    let parsedData;
+                    if (isExcel) {
+                        const workbook = XLSX.read(e.target.result, { type: 'binary' });
+                        const sheetName = workbook.SheetNames[0];
+                        const sheet = workbook.Sheets[sheetName];
+                        parsedData = XLSX.utils.sheet_to_json(sheet);
+                    } else {
+                        const result = Papa.parse(e.target.result, { header: true, skipEmptyLines: true });
+                        parsedData = result.data;
+                    }
+                    
+                    data[type] = normalizeData(parsedData, type);
+                    statusEl.innerHTML = `<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>${data[type].length} rows loaded</span>`;
+                    
+                    updateDataSummary();
+                    updateDashboard();
+                    populateFilters();
+                    
+                } catch (error) {
+                    statusEl.innerHTML = `<span class="text-red-600"><i class="fas fa-exclamation-circle mr-1"></i>Error: ${error.message}</span>`;
+                }
+            };
+            
+            if (isExcel) {
+                reader.readAsBinaryString(file);
+            } else {
+                reader.readAsText(file);
+            }
+        }
+
+        function normalizeData(rawData, type) {
+            const mapping = columnMappings[type];
+            return rawData.map(row => {
+                const normalized = { _original: row };
+                for (const [key, aliases] of Object.entries(mapping)) {
+                    const foundKey = Object.keys(row).find(k => 
+                        aliases.some(alias => k.toLowerCase().trim() === alias.toLowerCase().trim())
+                    );
+                    normalized[key] = foundKey ? row[foundKey] : '';
+                }
+                return normalized;
+            });
+        }
+
+        function updateDataSummary() {
+            const hasData = data.pricelist.length > 0 || data.quotation.length > 0 || data.oa.length > 0;
+            document.getElementById('data-summary').classList.toggle('hidden', !hasData);
+            document.getElementById('summary-products').textContent = data.pricelist.length;
+            document.getElementById('summary-quotations').textContent = data.quotation.length;
+            document.getElementById('summary-orders').textContent = data.oa.length;
+        }
+
+        function clearAllData() {
+            if (!confirm('Are you sure you want to clear all data?')) return;
+            data = { pricelist: [], quotation: [], oa: [] };
+            ['pricelist', 'quotation', 'oa'].forEach(type => {
+                document.getElementById(`${type}-status`).innerHTML = '';
+                document.getElementById(`${type}-input`).value = '';
+            });
+            updateDataSummary();
+            updateDashboard();
+        }
+
+        // Dashboard updates
+        function updateDashboard() {
+            document.getElementById('kpi-products').textContent = data.pricelist.length;
+            document.getElementById('kpi-quotations').textContent = data.quotation.length;
+            document.getElementById('kpi-orders').textContent = data.oa.length;
+            
+            const totalRevenue = data.oa.reduce((sum, order) => {
+                const amount = parseFloat(String(order.totalAmount).replace(/[^0-9.-]/g, '')) || 0;
+                return sum + amount;
+            }, 0);
+            document.getElementById('kpi-revenue').textContent = formatCurrency(totalRevenue);
+            
+            updateCharts();
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+        }
+
+        function updateCharts() {
+            // Customer Sales Chart
+            const customerSales = {};
+            data.oa.forEach(order => {
+                const customer = order.customer || 'Unknown';
+                const amount = parseFloat(String(order.totalAmount).replace(/[^0-9.-]/g, '')) || 0;
+                customerSales[customer] = (customerSales[customer] || 0) + amount;
+            });
+            
+            const sortedCustomers = Object.entries(customerSales).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            
+            Plotly.newPlot('chart-customer', [{
+                x: sortedCustomers.map(c => c[0]),
+                y: sortedCustomers.map(c => c[1]),
+                type: 'bar',
+                marker: { color: '#6366f1' }
+            }], {
+                margin: { t: 20, r: 20, b: 100, l: 80 },
+                xaxis: { tickangle: -45 },
+                yaxis: { title: 'Sales Amount' }
+            }, { responsive: true });
+            
+            // Sales Trend Chart
+            const monthlyData = {};
+            [...data.quotation, ...data.oa].forEach(item => {
+                const dateStr = item.date || item._original?.Date;
+                if (dateStr) {
+                    const date = new Date(dateStr);
+                    if (!isNaN(date)) {
+                        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                        const amount = parseFloat(String(item.totalAmount).replace(/[^0-9.-]/g, '')) || 0;
+                        monthlyData[key] = (monthlyData[key] || 0) + amount;
+                    }
+                }
+            });
+            
+            const sortedMonths = Object.entries(monthlyData).sort((a, b) => a[0].localeCompare(b[0]));
+            
+            Plotly.newPlot('chart-trend', [{
+                x: sortedMonths.map(m => m[0]),
+                y: sortedMonths.map(m => m[1]),
+                type: 'scatter',
+                mode: 'lines+markers',
+                line: { color: '#10b981', width: 3 },
+                marker: { size: 8 }
+            }], {
+                margin: { t: 20, r: 20, b: 60, l: 80 },
+                xaxis: { title: 'Month' },
+                yaxis: { title: 'Sales Amount' }
+            }, { responsive: true });
+            
+            // Model Distribution Chart
+            const modelSales = {};
+            data.oa.forEach(order => {
+                const model = order.model || 'Unknown';
+                const amount = parseFloat(String(order.totalAmount).replace(/[^0-9.-]/g, '')) || 0;
+                modelSales[model] = (modelSales[model] || 0) + amount;
+            });
+            
+            const topModels = Object.entries(modelSales).sort((a, b) => b[1] - a[1]).slice(0, 8);
+            
+            Plotly.newPlot('chart-model', [{
+                labels: topModels.map(m => m[0]),
+                values: topModels.map(m => m[1]),
+                type: 'pie',
+                hole: 0.4,
+                marker: { colors: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#f97316', '#eab308'] }
+            }], {
+                margin: { t: 20, r: 20, b: 20, l: 20 },
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.1 }
+            }, { responsive: true });
+            
+            // Order Status Chart
+            const statusCount = {};
+            data.oa.forEach(order => {
+                const status = order.status || 'Unknown';
+                statusCount[status] = (statusCount[status] || 0) + 1;
+            });
+            
+            Plotly.newPlot('chart-status', [{
+                x: Object.keys(statusCount),
+                y: Object.values(statusCount),
+                type: 'bar',
+                marker: { 
+                    color: Object.keys(statusCount).map((_, i) => 
+                        ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'][i % 5]
+                    )
+                }
+            }], {
+                margin: { t: 20, r: 20, b: 60, l: 60 },
+                xaxis: { title: 'Status' },
+                yaxis: { title: 'Count' }
+            }, { responsive: true });
+        }
+
+        // Product Lookup
+        function handleSearch(e) {
+            if (e.key === 'Enter') performSearch();
+        }
+
+        function performSearch() {
+            const query = document.getElementById('search-input').value.trim().toLowerCase();
+            if (!query) {
+                document.getElementById('search-results').innerHTML = `
+                    <div class="bg-white rounded-xl shadow-sm p-12 text-center text-gray-500">
+                        <i class="fas fa-search text-6xl mb-4 text-gray-300"></i>
+                        <p class="text-lg">Enter a Part Number or Article Code to search</p>
+                    </div>`;
+                return;
+            }
+            
+            // Search in pricelist
+            const matchingProducts = data.pricelist.filter(p => 
+                (p.partNr && String(p.partNr).toLowerCase().includes(query)) ||
+                (p.artNr && String(p.artNr).toLowerCase().includes(query))
+            );
+            
+            // Find related quotations
+            const relatedQuotes = data.quotation.filter(q =>
+                (q.partNo && String(q.partNo).toLowerCase().includes(query)) ||
+                (q.artNo && String(q.artNo).toLowerCase().includes(query))
+            );
+            
+            // Find related orders
+            const relatedOrders = data.oa.filter(o =>
+                (o.partNo && String(o.partNo).toLowerCase().includes(query)) ||
+                (o.artNo && String(o.artNo).toLowerCase().includes(query))
+            );
+            
+            // Build results HTML
+            let html = '';
+            
+            if (matchingProducts.length === 0 && relatedQuotes.length === 0 && relatedOrders.length === 0) {
+                html = `
+                    <div class="bg-white rounded-xl shadow-sm p-12 text-center text-gray-500">
+                        <i class="fas fa-search-minus text-6xl mb-4 text-gray-300"></i>
+                        <p class="text-lg">No results found for "${query}"</p>
+                        <p class="text-sm mt-2">Try a different Part Number or Article Code</p>
+                    </div>`;
+            } else {
+                // Product Details
+                if (matchingProducts.length > 0) {
+                    html += `
+                        <div class="bg-white rounded-xl shadow-sm p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-box mr-2 text-blue-500"></i>Product Details (${matchingProducts.length} found)
+                            </h3>
+                            <div class="overflow-x-auto">
+                                <table class="data-table w-full">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Art. Nr.</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Part Nr.</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Description</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Unit Wt.</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Matl. Code</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Make</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Model</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200">
+                                        ${matchingProducts.map(p => `
+                                            <tr class="hover:bg-gray-50">
+                                                <td class="px-4 py-3 font-medium text-indigo-600">${highlightText(p.artNr, query)}</td>
+                                                <td class="px-4 py-3 font-medium text-indigo-600">${highlightText(p.partNr, query)}</td>
+                                                <td class="px-4 py-3">${p.description || '-'}</td>
+                                                <td class="px-4 py-3">${p.unitWt || '-'}</td>
+                                                <td class="px-4 py-3">${p.matlCode || '-'}</td>
+                                                <td class="px-4 py-3">${p.make || '-'}</td>
+                                                <td class="px-4 py-3">${p.model || '-'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                }
+                
+                // Many-to-Many Relationship Display
+                const partNumbers = new Set(matchingProducts.map(p => p.partNr).filter(Boolean));
+                const artNumbers = new Set(matchingProducts.map(p => p.artNr).filter(Boolean));
+                
+                if (partNumbers.size > 0 || artNumbers.size > 0) {
+                    html += `
+                        <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl shadow-sm p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-project-diagram mr-2 text-purple-500"></i>Relationships (Many-to-Many)
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-white rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-700 mb-2">Related Part Numbers</h4>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${[...partNumbers].map(pn => `<span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">${pn}</span>`).join('') || '<span class="text-gray-400">None</span>'}
+                                    </div>
+                                </div>
+                                <div class="bg-white rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-700 mb-2">Related Article Codes</h4>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${[...artNumbers].map(an => `<span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm">${an}</span>`).join('') || '<span class="text-gray-400">None</span>'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                }
+                
+                // Quotation History
+                if (relatedQuotes.length > 0) {
+                    html += `
+                        <div class="bg-white rounded-xl shadow-sm p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-file-invoice mr-2 text-green-500"></i>Quotation History (${relatedQuotes.length} found)
+                            </h3>
+                            <div class="overflow-x-auto max-h-64 overflow-y-auto">
+                                <table class="data-table w-full">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Date</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Client</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Model</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Art No.</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Part No.</th>
+                                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Amount</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Vertical</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200">
+                                        ${relatedQuotes.map(q => `
+                                            <tr class="hover:bg-gray-50">
+                                                <td class="px-4 py-3">${q.date || '-'}</td>
+                                                <td class="px-4 py-3">${q.clientName || '-'}</td>
+                                                <td class="px-4 py-3">${q.model || '-'}</td>
+                                                <td class="px-4 py-3">${highlightText(q.artNo, query)}</td>
+                                                <td class="px-4 py-3">${highlightText(q.partNo, query)}</td>
+                                                <td class="px-4 py-3 text-right font-medium">${q.totalAmount || '-'}</td>
+                                                <td class="px-4 py-3">${q.vertical || '-'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                }
+                
+                // Order History
+                if (relatedOrders.length > 0) {
+                    html += `
+                        <div class="bg-white rounded-xl shadow-sm p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-shopping-cart mr-2 text-purple-500"></i>Order History (${relatedOrders.length} found)
+                            </h3>
+                            <div class="overflow-x-auto max-h-64 overflow-y-auto">
+                                <table class="data-table w-full">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Client PO</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Customer</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Model</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Art No.</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Part No.</th>
+                                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Amount</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200">
+                                        ${relatedOrders.map(o => `
+                                            <tr class="hover:bg-gray-50">
+                                                <td class="px-4 py-3">${o.clientPO || '-'}</td>
+                                                <td class="px-4 py-3">${o.customer || '-'}</td>
+                                                <td class="px-4 py-3">${o.model || '-'}</td>
+                                                <td class="px-4 py-3">${highlightText(o.artNo, query)}</td>
+                                                <td class="px-4 py-3">${highlightText(o.partNo, query)}</td>
+                                                <td class="px-4 py-3 text-right font-medium">${o.totalAmount || '-'}</td>
+                                                <td class="px-4 py-3">
+                                                    <span class="px-2 py-1 rounded-full text-xs font-medium ${getStatusClass(o.status)}">${o.status || '-'}</span>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                }
+            }
+            
+            document.getElementById('search-results').innerHTML = html;
+        }
+
+        function highlightText(text, query) {
+            if (!text) return '-';
+            const str = String(text);
+            const regex = new RegExp(`(${query})`, 'gi');
+            return str.replace(regex, '<span class="search-highlight">$1</span>');
+        }
+
+        function getStatusClass(status) {
+            const s = (status || '').toLowerCase();
+            if (s.includes('complete') || s.includes('done') || s.includes('delivered')) return 'bg-green-100 text-green-700';
+            if (s.includes('pending') || s.includes('process')) return 'bg-yellow-100 text-yellow-700';
+            if (s.includes('cancel') || s.includes('reject')) return 'bg-red-100 text-red-700';
+            return 'bg-gray-100 text-gray-700';
+        }
+
+        function clearSearch() {
+            document.getElementById('search-input').value = '';
+            performSearch();
+        }
+
+        // Sales Matrix
+        function populateFilters() {
+            const yearSelect = document.getElementById('matrix-year');
+            const customerSelect = document.getElementById('matrix-customer');
+            
+            const years = new Set();
+            const customers = new Set();
+            
+            [...data.oa, ...data.quotation].forEach(item => {
+                const dateStr = item.date || item._original?.Date;
+                if (dateStr) {
+                    const date = new Date(dateStr);
+                    if (!isNaN(date)) years.add(date.getFullYear());
+                }
+                const customer = item.customer || item.clientName;
+                if (customer) customers.add(customer);
+            });
+            
+            yearSelect.innerHTML = '<option value="all">All Years</option>' +
+                [...years].sort((a, b) => b - a).map(y => `<option value="${y}">${y}</option>`).join('');
+            
+            customerSelect.innerHTML = '<option value="all">All Customers</option>' +
+                [...customers].sort().map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+
+        function updateMatrix() {
+            const source = document.getElementById('matrix-source').value;
+            const yearFilter = document.getElementById('matrix-year').value;
+            const customerFilter = document.getElementById('matrix-customer').value;
+            const pivotType = document.getElementById('matrix-pivot').value;
+            
+            const sourceData = source === 'orders' ? data.oa : data.quotation;
+            
+            if (sourceData.length === 0) {
+                document.getElementById('matrix-container').innerHTML = '<p class="text-gray-500 text-center py-8">No data available. Upload Order or Quotation files.</p>';
+                return;
+            }
+            
+            // Filter data
+            let filteredData = sourceData.filter(item => {
+                const customer = item.customer || item.clientName;
+                const dateStr = item.date || item._original?.Date;
+                let year = null;
+                if (dateStr) {
+                    const date = new Date(dateStr);
+                    if (!isNaN(date)) year = date.getFullYear();
+                }
+                
+                if (yearFilter !== 'all' && year !== parseInt(yearFilter)) return false;
+                if (customerFilter !== 'all' && customer !== customerFilter) return false;
+                return true;
+            });
+            
+            // Build pivot table
+            const pivot = {};
+            const rowLabels = new Set();
+            const colLabels = new Set();
+            
+            filteredData.forEach(item => {
+                const customer = item.customer || item.clientName || 'Unknown';
+                const model = item.model || 'Unknown';
+                const dateStr = item.date || item._original?.Date;
+                let year = 'Unknown';
+                if (dateStr) {
+                    const date = new Date(dateStr);
+                    if (!isNaN(date)) year = date.getFullYear();
+                }
+                const amount = parseFloat(String(item.totalAmount).replace(/[^0-9.-]/g, '')) || 0;
+                
+                let rowKey, colKey;
+                switch (pivotType) {
+                    case 'customer-year':
+                        rowKey = customer;
+                        colKey = year;
+                        break;
+                    case 'customer-model':
+                        rowKey = customer;
+                        colKey = model;
+                        break;
+                    case 'model-year':
+                        rowKey = model;
+                        colKey = year;
+                        break;
+                }
+                
+                rowLabels.add(rowKey);
+                colLabels.add(colKey);
+                
+                if (!pivot[rowKey]) pivot[rowKey] = {};
+                pivot[rowKey][colKey] = (pivot[rowKey][colKey] || 0) + amount;
+            });
+            
+            const sortedRows = [...rowLabels].sort();
+            const sortedCols = [...colLabels].sort();
+            
+            // Build table HTML
+            let html = `
+                <table class="data-table w-full border-collapse">
+                    <thead class="bg-indigo-600 text-white">
+                        <tr>
+                            <th class="px-4 py-3 text-left font-semibold border-r border-indigo-500">${pivotType.split('-')[0].charAt(0).toUpperCase() + pivotType.split('-')[0].slice(1)}</th>
+                            ${sortedCols.map(col => `<th class="pivot-cell px-4 py-3 text-right font-semibold">${col}</th>`).join('')}
+                            <th class="pivot-cell px-4 py-3 text-right font-semibold bg-indigo-700">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            
+            let grandTotal = 0;
+            const colTotals = {};
+            
+            sortedRows.forEach((row, i) => {
+                let rowTotal = 0;
+                html += `<tr class="${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
+                    <td class="px-4 py-3 font-medium border-r border-gray-200">${row}</td>`;
+                
+                sortedCols.forEach(col => {
+                    const value = pivot[row]?.[col] || 0;
+                    rowTotal += value;
+                    colTotals[col] = (colTotals[col] || 0) + value;
+                    html += `<td class="pivot-cell px-4 py-3 text-right">${value > 0 ? formatCurrency(value) : '-'}</td>`;
+                });
+                
+                grandTotal += rowTotal;
+                html += `<td class="pivot-cell px-4 py-3 text-right font-medium bg-gray-100">${formatCurrency(rowTotal)}</td></tr>`;
+            });
+            
+            // Footer totals
+            html += `
+                    <tr class="bg-indigo-100 font-semibold">
+                        <td class="px-4 py-3 border-r border-indigo-200">Total</td>
+                        ${sortedCols.map(col => `<td class="pivot-cell px-4 py-3 text-right">${formatCurrency(colTotals[col] || 0)}</td>`).join('')}
+                        <td class="pivot-cell px-4 py-3 text-right bg-indigo-200">${formatCurrency(grandTotal)}</td>
+                    </tr>
+                </tbody>
+            </table>`;
+            
+            document.getElementById('matrix-container').innerHTML = html;
+            
+            // Update chart
+            const chartData = sortedRows.slice(0, 10).map(row => ({
+                name: row,
+                values: sortedCols.map(col => pivot[row]?.[col] || 0)
+            }));
+            
+            const traces = chartData.map((d, i) => ({
+                name: d.name,
+                x: sortedCols,
+                y: d.values,
+                type: 'bar'
+            }));
+            
+            Plotly.newPlot('matrix-chart', traces, {
+                barmode: 'group',
+                margin: { t: 20, r: 20, b: 60, l: 80 },
+                legend: { orientation: 'h', y: -0.2 }
+            }, { responsive: true });
+        }
+
+        function exportMatrix() {
+            const table = document.querySelector('#matrix-container table');
+            if (!table) return alert('No data to export');
+            
+            let csv = '';
+            table.querySelectorAll('tr').forEach(row => {
+                const cells = [...row.querySelectorAll('th, td')].map(cell => `"${cell.textContent.trim()}"`);
+                csv += cells.join(',') + '\n';
+            });
+            
+            downloadCSV(csv, 'sales_matrix.csv');
+        }
+
+        // Data Viewer
+        function viewData(type) {
+            currentViewerData = type;
+            viewerPage = 1;
+            
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700');
+            });
+            document.getElementById(`view-${type}`).classList.add('bg-blue-600', 'text-white');
+            document.getElementById(`view-${type}`).classList.remove('bg-gray-200', 'text-gray-700');
+            
+            renderViewerData();
+        }
+
+        function getMergedData() {
+            // Merge OA and Quotation data with Pricelist attributes
+            const pricelistMap = {};
+            data.pricelist.forEach(p => {
+                if (p.partNr) {
+                    if (!pricelistMap[p.partNr]) pricelistMap[p.partNr] = [];
+                    pricelistMap[p.partNr].push(p);
+                }
+            });
+            
+            const merged = [];
+            
+            data.oa.forEach(order => {
+                const partNo = order.partNo;
+                const priceInfo = pricelistMap[partNo]?.[0] || {};
+                merged.push({
+                    source: 'Order',
+                    clientPO: order.clientPO,
+                    customer: order.customer,
+                    model: order.model,
+                    artNo: order.artNo,
+                    partNo: order.partNo,
+                    totalAmount: order.totalAmount,
+                    status: order.status,
+                    description: priceInfo.description || '-',
+                    unitWt: priceInfo.unitWt || '-',
+                    matlCode: priceInfo.matlCode || '-'
+                });
+            });
+            
+            data.quotation.forEach(quote => {
+                const partNo = quote.partNo;
+                const priceInfo = pricelistMap[partNo]?.[0] || {};
+                merged.push({
+                    source: 'Quotation',
+                    date: quote.date,
+                    clientName: quote.clientName,
+                    model: quote.model,
+                    artNo: quote.artNo,
+                    partNo: quote.partNo,
+                    totalAmount: quote.totalAmount,
+                    vertical: quote.vertical,
+                    description: priceInfo.description || '-',
+                    unitWt: priceInfo.unitWt || '-',
+                    matlCode: priceInfo.matlCode || '-'
+                });
+            });
+            
+            return merged;
+        }
+
+        function renderViewerData() {
+            let sourceData;
+            let columns;
+            
+            switch (currentViewerData) {
+                case 'pricelist':
+                    sourceData = data.pricelist;
+                    columns = ['artNr', 'description', 'partNr', 'unitWt', 'matlCode', 'make', 'model'];
+                    break;
+                case 'quotation':
+                    sourceData = data.quotation;
+                    columns = ['date', 'clientName', 'model', 'artNo', 'partNo', 'totalAmount', 'vertical'];
+                    break;
+                case 'oa':
+                    sourceData = data.oa;
+                    columns = ['clientPO', 'customer', 'model', 'artNo', 'partNo', 'totalAmount', 'status'];
+                    break;
+                case 'merged':
+                    sourceData = getMergedData();
+                    columns = Object.keys(sourceData[0] || {});
+                    break;
+            }
+            
+            const filter = document.getElementById('viewer-filter').value.toLowerCase();
+            let filteredData = sourceData;
+            
+            if (filter) {
+                filteredData = sourceData.filter(row => 
+                    columns.some(col => String(row[col] || '').toLowerCase().includes(filter))
+                );
+            }
+            
+            if (filteredData.length === 0) {
+                document.getElementById('data-viewer-container').innerHTML = '<p class="text-gray-500 text-center py-8">No data available</p>';
+                document.getElementById('viewer-pagination').innerHTML = '';
+                return;
+            }
+            
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            const start = (viewerPage - 1) * rowsPerPage;
+            const pageData = filteredData.slice(start, start + rowsPerPage);
+            
+            const columnLabels = {
+                artNr: 'Art. Nr.', description: 'Description', partNr: 'Part Nr.', 
+                unitWt: 'Unit Wt.', matlCode: 'Matl. Code', make: 'Make', model: 'Model',
+                date: 'Date', clientName: 'Client Name', artNo: 'Art No.', partNo: 'Part No.',
+                totalAmount: 'Total Amount', vertical: 'Vertical', clientPO: 'Client PO',
+                customer: 'Customer', status: 'Status', source: 'Source'
+            };
+            
+            let html = `
+                <table class="data-table w-full">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            ${columns.map(col => `<th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">${columnLabels[col] || col}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        ${pageData.map((row, i) => `
+                            <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50">
+                                ${columns.map(col => `<td class="px-4 py-3 whitespace-nowrap">${row[col] || '-'}</td>`).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>`;
+            
+            document.getElementById('data-viewer-container').innerHTML = html;
+            
+            // Pagination
+            document.getElementById('viewer-pagination').innerHTML = `
+                <div class="text-sm text-gray-600">
+                    Showing ${start + 1}-${Math.min(start + rowsPerPage, filteredData.length)} of ${filteredData.length} rows
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="changeViewerPage(-1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50" ${viewerPage === 1 ? 'disabled' : ''}>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span class="px-3 py-1">Page ${viewerPage} of ${totalPages}</span>
+                    <button onclick="changeViewerPage(1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50" ${viewerPage === totalPages ? 'disabled' : ''}>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>`;
+        }
+
+        function changeViewerPage(delta) {
+            viewerPage += delta;
+            renderViewerData();
+        }
+
+        function filterViewerData() {
+            viewerPage = 1;
+            renderViewerData();
+        }
+
+        function exportViewerData() {
+            let sourceData;
+            switch (currentViewerData) {
+                case 'pricelist': sourceData = data.pricelist; break;
+                case 'quotation': sourceData = data.quotation; break;
+                case 'oa': sourceData = data.oa; break;
+                case 'merged': sourceData = getMergedData(); break;
+            }
+            
+            if (!sourceData || sourceData.length === 0) return alert('No data to export');
+            
+            const filter = document.getElementById('viewer-filter').value.toLowerCase();
+            let exportData = sourceData;
+            
+            if (filter) {
+                const columns = Object.keys(sourceData[0]);
+                exportData = sourceData.filter(row => 
+                    columns.some(col => String(row[col] || '').toLowerCase().includes(filter))
+                );
+            }
+            
+            const columns = Object.keys(exportData[0]).filter(c => c !== '_original');
+            let csv = columns.join(',') + '\n';
+            exportData.forEach(row => {
+                csv += columns.map(col => `"${String(row[col] || '').replace(/"/g, '""')}"`).join(',') + '\n';
+            });
+            
+            downloadCSV(csv, `${currentViewerData}_export.csv`);
+        }
+
+        function downloadCSV(content, filename) {
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+    </script>
+</body>
+</html>
